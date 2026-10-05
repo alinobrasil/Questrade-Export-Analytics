@@ -1,5 +1,7 @@
 """Usage:
   python3 -m qtinsights serve [port]      open the dashboard (default port 8765)
+  python3 -m qtinsights demo [port]       open the dashboard on made-up data (default port 8766)
+  python3 -m qtinsights demo chase [port] "chase the winner" vs the S&P 500, real prices (port 8766)
   python3 -m qtinsights sync [token]      pull new data from Questrade
   python3 -m qtinsights import FILE       load a questrade_export.json
   python3 -m qtinsights check             print data problems found
@@ -14,6 +16,21 @@ from .store import Store
 
 def main(argv):
     cmd = argv[0] if argv else "serve"
+    if cmd == "demo":
+        from .server import serve
+        variant = argv[1] if len(argv) > 1 and not argv[1].isdigit() else "simple"
+        rest = [a for a in argv[1:] if a.isdigit()]
+        config.enable_demo(variant)
+        config.DB_FILE.unlink(missing_ok=True)  # rebuilt fresh, so it always ends today
+        if variant == "chase":
+            from . import demo_chase
+            print("Fetching prices from Yahoo Finance (cached for the day)…", file=sys.stderr)
+            demo_chase.build(Store(config.DB_FILE))
+        else:
+            from . import demo
+            demo.build(Store(config.DB_FILE))
+        serve(int(rest[0]) if rest else 8766)
+        return
     if cmd == "serve":
         from .server import serve
         serve(int(argv[1]) if len(argv) > 1 else 8765)

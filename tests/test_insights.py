@@ -179,6 +179,47 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(sorted(r["n"] for r in got), [0, 1, 2, 3, 4, 5])
 
 
+class DemoTest(unittest.TestCase):
+    """Demo data must hang together like a real sync, and never touch the real database."""
+
+    def test_demo_is_consistent(self):
+        from qtinsights import demo
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(config, "DEMO", True):
+            store = Store(Path(d) / "demo.db")
+            demo.build(store)
+            r = analytics.build(store)
+        self.assertEqual(r["issues"], [])
+        self.assertEqual({a["type"] for a in r["accounts"]}, {"TFSA", "RRSP", "FHSA"})
+        self.assertGreater(r["withholding"]["accounts"][0]["cad"], 0)  # TFSA pays US withholding
+        self.assertEqual(r["withholding"]["accounts"][1]["cad"], 0)  # RRSP doesn't
+
+    def test_enable_demo_switches_database(self):
+        real = config.DB_FILE
+        with mock.patch.object(config, "DEMO", False), mock.patch.object(config, "DB_FILE", real):
+            config.enable_demo()
+            self.assertEqual(config.DB_FILE.name, "demo.db")
+            self.assertNotEqual(config.DB_FILE, real)
+
+
+class ChaseDemoTest(unittest.TestCase):
+    """The chase-the-winner rules, on made-up prices (no network)."""
+
+    def test_buys_once_a_year_and_reinvests_dividends_per_lot(self):
+        from datetime import date
+        from qtinsights import demo_chase
+        closes = {date(2020, 1, 2): 10.0, date(2020, 6, 1): 20.0, date(2021, 1, 4): 25.0, date(2021, 6, 1): 25.0}
+        data = {"AAA": (closes, {date(2020, 6, 1): 1.0, date(2021, 6, 1): 1.0})}
+        rows, shares, lots = demo_chase.account_rows([(2020, "AAA"), (2021, "AAA")], data, date(2021, 12, 31))
+        self.assertEqual(sum(r["netAmount"] for r in rows if r["type"] == "Deposits"), 2000)
+        # 2020: 100 shares; June dividend $100 buys 5 more at $20. 2021: 40 shares at $25.
+        # June 2021 dividend $145 buys 5.8 more at $25, split between the lots by their size.
+        self.assertAlmostEqual(shares["AAA"], 150.8)
+        self.assertAlmostEqual(lots[0], 105 + 5.8 * 105 / 145)
+        self.assertAlmostEqual(lots[0] + lots[1], shares["AAA"])
+        cash = sum(r["netAmount"] for r in rows if r["type"] != "Deposits")
+        self.assertAlmostEqual(cash, -2000, places=1)  # every dollar invested, nothing left in cash
+
+
 @unittest.skipUnless((ROOT / "questrade_export.json").exists(), "needs a real export")
 class RealDataTest(unittest.TestCase):
     """The rebuilt ledger must agree with Questrade's own positions and cash."""

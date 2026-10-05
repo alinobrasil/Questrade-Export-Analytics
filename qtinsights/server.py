@@ -37,6 +37,18 @@ class State:
             self.syncing = False
 
 
+def demo_info(store):
+    """What the page needs to label a demo: its title and note, currency, and per-pick table."""
+    if not config.DEMO:
+        return None
+    picks = store.meta("demo_picks")
+    return {"title": store.meta("demo_title") or "Made-up portfolio",
+            "note": store.meta("demo_note") or "Every account, amount and transaction here is made up.",
+            "currency": store.meta("demo_currency") or "CAD",
+            "prices_as_of": store.meta("demo_prices_as_of"),
+            "picks": json.loads(picks) if picks else None}
+
+
 def make_handler(state):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -59,8 +71,9 @@ def make_handler(state):
                     has_data = bool(state.store.accounts())
                     data = analytics.build(state.store) if has_data else None
                     needs_scope = state.store.meta("price_error") == "scope"
-                return self.send(200, {"data": data, "has_token": config.TOKEN_FILE.exists(),
-                                       "needs_market_data": needs_scope})
+                return self.send(200, {"data": data, "has_token": config.DEMO or config.TOKEN_FILE.exists(),
+                                       "needs_market_data": needs_scope and not config.DEMO,
+                                       "demo": bool(config.DEMO), "demo_info": demo_info(state.store)})
             if self.path == "/api/sync":
                 return self.send(200, {"syncing": state.syncing, "log": state.sync_log[-12:],
                                        "error": state.sync_error})
@@ -75,6 +88,8 @@ def make_handler(state):
                 return self.send(403, {"error": "forbidden"})
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length) or b"{}")
+            if config.DEMO:
+                return self.send(409, {"error": "This is demo data; syncing is turned off."})
             if state.syncing:
                 return self.send(409, {"error": "A sync is already running."})
             state.syncing, state.sync_log, state.sync_error = True, [], None
@@ -87,7 +102,8 @@ def make_handler(state):
 def serve(port=8765):
     state = State()
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
-    print(f"Questrade Insights running at http://127.0.0.1:{port}  (Ctrl-C to stop)")
+    label = "Questrade Insights (DEMO DATA)" if config.DEMO else "Questrade Insights"
+    print(f"{label} running at http://127.0.0.1:{port}  (Ctrl-C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

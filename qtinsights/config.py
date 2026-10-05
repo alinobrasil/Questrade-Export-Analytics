@@ -34,8 +34,24 @@ DEFAULTS = {
 }
 
 
+DEMO = False  # False, or the demo's name: "simple" (made-up portfolio) or "chase" (chase the winner)
+
+
+def enable_demo(variant="simple"):
+    """Switch to demo data: a separate database, and none of your settings or token."""
+    global DEMO, DB_FILE
+    DEMO = variant
+    DB_FILE = ROOT / "data" / ("demo.db" if variant == "simple" else f"demo_{variant}.db")
+
+
 def load():
     cfg = dict(DEFAULTS)
-    if CONFIG_FILE.exists():
+    if DEMO == "chase":
+        from .demo_chase import DEMO_CONFIG
+        cfg.update(DEMO_CONFIG)
+    elif DEMO:
+        from .demo import DEMO_CONFIG
+        cfg.update(DEMO_CONFIG)
+    elif CONFIG_FILE.exists():
         cfg.update(json.loads(CONFIG_FILE.read_text()))
     return cfg

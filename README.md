@@ -14,6 +14,25 @@ python3 -m qtinsights serve
 Open http://127.0.0.1:8765. The first time, paste a refresh token (see below).
 After that, press **Sync now**; the app keeps the token current on its own.
 
+To try it, or to share screenshots, without your own data:
+
+```bash
+python3 -m qtinsights demo           # made-up portfolio at http://127.0.0.1:8766
+```
+
+Demo mode builds a separate database (`data/demo.db`) from simulated accounts, trades and
+prices. It doesn't read your `config.json`, token or database, and syncing is turned off.
+
+```bash
+python3 -m qtinsights demo chase     # "chase the winner" vs the S&P 500, real prices
+```
+
+A second demo: each January, $1,000 into the S&P 500 stock that gained the most the year
+before (picks from chase-the-winner.vercel.app, 2018 onwards), never sold, dividends
+reinvested, side by side with $1,000 a year into SPY. It uses real daily prices and
+dividends from Yahoo Finance, so it needs internet the first time each day (cached in
+`data/demo_cache/`). Amounts are in US dollars.
+
 Command line equivalents:
 
 ```bash

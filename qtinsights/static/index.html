@@ -120,6 +120,9 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
 .hbar .fill{position:absolute;inset:0 auto 0 0;border-radius:0 4px 4px 0;min-width:2px}
 .hbar .val{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .hbar .val small{color:var(--muted);font-size:12px;margin-left:8px;display:inline-block;min-width:44px}
+.demo{border:1px dashed var(--brand-line);background:var(--brand-soft);border-radius:10px;padding:10px 14px;font-size:14px}
+.demo b{color:var(--brand)}
+.badge{display:inline-block;vertical-align:middle;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-ink);background:var(--brand);border-radius:6px;padding:2px 7px;margin-left:6px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -129,7 +132,7 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
     <div class="titlebox">
       <span class="logo" aria-hidden="true">Q</span>
       <div>
-        <h1>Questrade Insights</h1>
+        <h1>Questrade Insights <span class="badge" id="demo-badge" hidden>Demo</span></h1>
         <p class="sub" id="meta">Loading…</p>
       </div>
     </div>
@@ -140,6 +143,7 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
     </div>
   </header>
   <div class="brandbar" aria-hidden="true"></div>
+  <div class="demo" id="demo-banner" hidden><b>Demo data.</b> Every account, amount and transaction here is made up. Run <code>python3 -m qtinsights serve</code> to see your own.</div>
 
   <section class="panel" id="setup" hidden>
     <h2>Connect to Questrade</h2>
@@ -164,12 +168,17 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
 
       <section class="panel">
         <div class="panel-head">
-          <div><h2>Money put in vs. value</h2><p class="sub">Net deposits to date against what the account was worth, in Canadian dollars.</p></div>
+          <div><h2>Money put in vs. value</h2><p class="sub">Net deposits to date against what the account was worth, in <span class="curname">Canadian dollars</span>.</p></div>
           <div class="seg" id="acct-filter" role="group" aria-label="Account"></div>
         </div>
-        <div class="legend"><span><i class="sw line" style="background:var(--brand)"></i>Value</span><span><i class="sw" style="background:var(--brand-line)"></i>Gain</span><span><i class="sw" style="background:var(--grid)"></i>Money put in</span></div>
+        <div class="legend" id="growth-legend"></div>
         <div class="chart" id="c-growth"></div>
         <details><summary>Show as table</summary><div class="tw" id="t-growth"></div></details>
+      </section>
+
+      <section class="panel" id="picks-panel" style="--hc:var(--brand)" hidden>
+        <div><h2>What each $1,000 became</h2><p class="sub" id="picks-sub"></p></div>
+        <div class="tw" id="t-picks"></div>
       </section>
 
       <section class="panel" style="--hc:var(--s1)">
@@ -183,7 +192,7 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
           <div class="hbars" id="c-types"></div>
         </div>
         <div class="panel" style="--hc:var(--s2)">
-          <div><h2>By account</h2><p class="sub">Holdings plus cash, in Canadian dollars.</p></div>
+          <div><h2>By account</h2><p class="sub">Holdings plus cash, in <span class="curname">Canadian dollars</span>.</p></div>
           <div class="hbars" id="c-accts"></div>
         </div>
       </section>
@@ -194,20 +203,20 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
       </section>
 
       <section class="panel" style="--hc:var(--eq)">
-        <div><h2>Dividends</h2><p class="sub">Cash distributions received, after any tax withheld, in Canadian dollars.</p></div>
+        <div><h2>Dividends</h2><p class="sub">Cash distributions received, after any tax withheld, in <span class="curname">Canadian dollars</span>.</p></div>
         <div class="stats" id="div-stats"></div>
         <div class="legend" id="div-legend"></div>
         <div class="chart" id="c-div"></div>
         <details><summary>Show as table</summary><div class="tw" id="t-div"></div></details>
       </section>
 
-      <section class="panel" style="--hc:var(--bad)">
+      <section class="panel" id="wh-panel" style="--hc:var(--bad)">
         <div><h2>US tax withheld on dividends</h2><p class="sub">The US keeps 15% of dividends from US-listed funds held in a TFSA or FHSA, and it can't be recovered. RRSPs are exempt under the tax treaty. Questrade reports dividends after the tax, so these amounts are estimated from what was paid.</p></div>
         <div class="tw" id="t-wh"></div>
         <p class="sub" id="wh-note"></p>
       </section>
 
-      <section class="panel" style="--hc:var(--s3)">
+      <section class="panel" id="room-panel" style="--hc:var(--s3)">
         <div><h2>Contribution room</h2><p class="sub">Based only on deposits to these Questrade accounts. Contributions made elsewhere aren't visible here.</p></div>
         <div class="grid2">
           <div id="fhsa"></div>
@@ -234,7 +243,8 @@ footer ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;ga
 <script>
 const $ = id => document.getElementById(id);
 const COLORS = {TFSA: 'var(--s1)', RRSP: 'var(--s2)', FHSA: 'var(--s3)'};
-const colorFor = t => COLORS[t] || 'var(--muted)';
+const SLOTS = ['var(--s1)', 'var(--s2)', 'var(--s3)'];
+const colorFor = t => COLORS[t] || SLOTS[Math.max(0, (D ? D.accounts.findIndex(a => a.type === t) : 0)) % 3];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 // Privacy mode: amounts and share counts become dots; percentages, dates and prices stay.
 let PRIVATE = false;
@@ -252,7 +262,7 @@ const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-CA', {year
 const ago = iso => { if (!iso) return 'never'; const m = (Date.now() - Date.parse(iso)) / 60000;
   return m < 2 ? 'just now' : m < 90 ? Math.round(m) + ' min ago' : m < 2880 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; };
 
-let D = null, filter = 'all';
+let D = null, filter = 'all', DEMO = false, DEMO_INFO = null, CUR = 'CAD';
 
 function nice(max) {
   if (max <= 0) return {step: 1, max: 1};
@@ -264,10 +274,25 @@ function tipFor(el) { let t = el.querySelector('.tip'); if (!t) { t = document.c
 function placeTip(t, el, x, y) { t.hidden = false; const w = t.offsetWidth, W = el.clientWidth; let l = x + 14; if (l + w > W) l = x - w - 14; t.style.left = Math.max(0, l) + 'px'; t.style.top = Math.max(0, y - 12) + 'px'; }
 
 /* ---------- tiles ---------- */
+// The chase demo's two accounts are a strategy and its benchmark: compare them, never add them up.
+const compareMode = () => !!(DEMO_INFO && DEMO_INFO.picks && D.accounts.length === 2);
+
+function renderCompareTiles() {
+  const [a, b] = D.accounts;
+  const tile = (cls, tc, label, value, note) => `<div class="tile ${cls}" style="--tc:${tc}"><span class="label">${label}</span><span class="value">${value}</span><span class="note">${note}</span></div>`;
+  const r = a.value / b.value;
+  $('tiles').innerHTML =
+    tile('hero', colorFor(a.type), `${esc(a.type)} today`, money(a.value), `${money(a.money_in)} put in · ${signed(a.gain)}`) +
+    tile('', colorFor(b.type), `${esc(b.type)} today`, money(b.value), `${money(b.money_in)} put in · ${signed(b.gain)}`) +
+    tile(r < 1 ? 'bad' : 'good', `var(${r < 1 ? '--bad' : '--good'})`, `${esc(a.type)} vs ${esc(b.type)}`, `<span class="${r < 1 ? 'dn' : 'up'}">${r.toFixed(2)}×</span>`, 'Same money, same days') +
+    tile('', 'var(--brand)', 'Annualized return', `${pct(a.xirr)}`, `vs ${pct(b.xirr)} for ${esc(b.type)}`);
+}
+
 function renderTiles() {
+  if (compareMode()) return renderCompareTiles();
   const t = D.totals;
   $('tiles').innerHTML = `
-    <div class="tile hero" style="--tc:var(--brand)"><span class="label">Value today</span><span class="value">${money(t.value)}</span><span class="note">All accounts, in CAD</span></div>
+    <div class="tile hero" style="--tc:var(--brand)"><span class="label">Value today</span><span class="value">${money(t.value)}</span><span class="note">All accounts, in ${CUR}</span></div>
     <div class="tile" style="--tc:var(--cash)"><span class="label">Money put in</span><span class="value">${money(t.money_in)}</span><span class="note">Deposits minus withdrawals</span></div>
     <div class="tile ${t.gain < 0 ? 'bad' : 'good'}" style="--tc:var(${t.gain < 0 ? '--bad' : '--good'})"><span class="label">Total gain</span><span class="value ${t.gain < 0 ? 'dn' : 'up'}">${signed(t.gain)}</span><span class="note">${pct(t.gain / t.money_in)} on money put in</span></div>
     <div class="tile" style="--tc:var(--s1)"><span class="label">Annualized return</span><span class="value ${t.xirr < 0 ? 'dn' : 'up'}">${pct(t.xirr)}</span><span class="note">Money-weighted, all accounts</span></div>`;
@@ -275,6 +300,7 @@ function renderTiles() {
 
 /* ---------- money put in vs value ---------- */
 function renderFilter() {
+  $('acct-filter').hidden = compareMode();
   const opts = [['all', 'All'], ...D.accounts.map(a => [a.number, a.type])];
   $('acct-filter').innerHTML = opts.map(([k, l]) => `<button data-k="${k}" aria-pressed="${k === filter}">${l}</button>`).join('');
   $('acct-filter').querySelectorAll('button').forEach(b => b.onclick = () => { filter = b.dataset.k; renderFilter(); renderGrowth(); });
@@ -284,7 +310,58 @@ function growthSeries() {
   const sum = key => S.dates.map((_, i) => nums.reduce((s, n) => s + S[key][n][i], 0));
   return {dates: S.dates, value: sum('value'), put: sum('money_in')};
 }
+function renderCompareGrowth() {
+  // One value line per account, over the money put in (the same for both).
+  const el = $('c-growth'), S = D.series, n = S.dates.length, accts = D.accounts;
+  $('growth-legend').innerHTML = accts.map(a => `<span><i class="sw line" style="background:${colorFor(a.type)}"></i>${esc(a.type)}</span>`).join('') +
+    '<span><i class="sw" style="background:var(--grid)"></i>Money put in, each</span>';
+  const W = Math.max(320, el.clientWidth), H = W < 560 ? 280 : 340, narrow = W < 560;
+  const mL = 48, mR = narrow ? 100 : 128, mT = 12, mB = 26;
+  const t = S.dates.map(d => Date.parse(d)), t0 = t[0], t1 = t[n - 1];
+  const put = S.money_in[accts[0].number];
+  const yM = nice(Math.max(...accts.flatMap(a => S.value[a.number]), ...put) * 1.04);
+  const x = v => mL + (v - t0) / (t1 - t0 || 1) * (W - mL - mR), y = v => mT + (1 - v / yM.max) * (H - mT - mB);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Value of each account over time against money put in">`;
+  for (let v = 0; v <= yM.max + 1e-6; v += yM.step)
+    s += `<line x1="${mL}" x2="${W - mR}" y1="${y(v)}" y2="${y(v)}" stroke="${v ? 'var(--grid)' : 'var(--axis)'}"/><text x="${mL - 6}" y="${y(v) + 4}" text-anchor="end">${kfmt(v)}</text>`;
+  const y0 = new Date(t0).getFullYear(), y1 = new Date(t1).getFullYear(), every = Math.ceil((y1 - y0 + 1) / (narrow ? 5 : 10));
+  for (let yr = y0 + 1; yr <= y1; yr += every) s += `<text x="${x(Date.parse(yr + '-01-01'))}" y="${H - 6}" text-anchor="middle">${yr}</text>`;
+  let area = `M${x(t[0])},${y(0)}V${y(put[0])}`;
+  for (let i = 1; i < n; i++) area += `H${x(t[i])}V${y(put[i])}`;
+  s += `<path d="${area}V${y(0)}Z" fill="var(--grid)"/>`;
+  const labels = [{y: y(put[n - 1]), t: money(put[n - 1]) + ' put in'}];
+  accts.forEach(a => {
+    const v = S.value[a.number], c = colorFor(a.type);
+    s += `<path d="${v.map((p, i) => (i ? 'L' : 'M') + x(t[i]).toFixed(1) + ',' + y(p).toFixed(1)).join('')}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>`;
+    s += `<circle cx="${x(t1)}" cy="${y(v[n - 1])}" r="4.5" fill="${c}" stroke="var(--surface)" stroke-width="2"/>`;
+    labels.push({y: y(v[n - 1]), t: money(v[n - 1]) + ' ' + a.type});
+  });
+  labels.sort((p, q) => p.y - q.y);
+  for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 14) labels[i].y = labels[i - 1].y + 14;
+  labels.forEach(l => s += `<text class="end" x="${W - mR + 8}" y="${l.y + 4}">${esc(l.t)}</text>`);
+  s += `<line class="xh" y1="${mT}" y2="${H - mB}" stroke="var(--muted)" visibility="hidden"/><rect class="hit" x="${mL}" y="0" width="${W - mL - mR}" height="${H}" fill="transparent"/></svg>`;
+  el.innerHTML = s;
+  const tip = tipFor(el), xh = el.querySelector('.xh'), hit = el.querySelector('.hit');
+  hit.onpointermove = e => {
+    const r = el.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width, tv = t0 + (px - mL) / (W - mL - mR) * (t1 - t0);
+    let i = 0; while (i < n - 1 && Math.abs(t[i + 1] - tv) < Math.abs(t[i] - tv)) i++;
+    xh.setAttribute('x1', x(t[i])); xh.setAttribute('x2', x(t[i])); xh.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<b>${fmtDate(S.dates[i])}</b><br>` + accts.map(a => `${esc(a.type)} ${money(S.value[a.number][i])}`).join('<br>') + `<br>Put in ${money(put[i])} each`;
+    placeTip(tip, el, e.clientX - r.left, e.clientY - r.top);
+  };
+  hit.onpointerleave = () => { tip.hidden = true; xh.setAttribute('visibility', 'hidden'); };
+  const rows = [];
+  for (let yr = y0; yr <= y1; yr++) {
+    const end = yr === y1 ? S.dates[n - 1] : yr + '-12-31';
+    let i = -1; S.dates.forEach((d, j) => { if (d <= end) i = j; });
+    if (i >= 0) rows.push(`<tr><td>${yr === y1 ? 'Today' : 'End of ' + yr}</td><td>${money(put[i])}</td>${accts.map(a => `<td>${money(S.value[a.number][i])}</td>`).join('')}</tr>`);
+  }
+  $('t-growth').innerHTML = `<table><thead><tr><th>Date</th><th>Put in, each</th>${accts.map(a => `<th>${esc(a.type)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
 function renderGrowth() {
+  if (compareMode()) return renderCompareGrowth();
+  $('growth-legend').innerHTML = '<span><i class="sw line" style="background:var(--brand)"></i>Value</span><span><i class="sw" style="background:var(--brand-line)"></i>Gain</span><span><i class="sw" style="background:var(--grid)"></i>Money put in</span>';
   const el = $('c-growth'), g = growthSeries(), n = g.dates.length;
   const W = Math.max(320, el.clientWidth), H = W < 560 ? 280 : 340, narrow = W < 560;
   const mL = 48, mR = narrow ? 100 : 128, mT = 12, mB = 26;
@@ -343,7 +420,7 @@ function renderAccounts() {
   const rows = D.accounts.map(a => `<tr><td>${acctCell(a.type)} <span class="sub">${PRIVATE ? HIDDEN : esc(a.number)}</span></td><td>${money(a.value)}</td><td>${money(a.money_in)}</td><td class="${a.gain < 0 ? 'dn' : 'up'}">${signed(a.gain)}</td><td>${pct(a.xirr)}</td></tr>`).join('');
   const t = D.totals;
   $('t-accounts').innerHTML = `<table><thead><tr><th>Account</th><th>Value</th><th>Put in</th><th>Gain</th><th>Annualized</th></tr></thead><tbody>${rows}
-    <tr class="total"><td>All accounts</td><td>${money(t.value)}</td><td>${money(t.money_in)}</td><td class="${t.gain < 0 ? 'dn' : 'up'}">${signed(t.gain)}</td><td>${pct(t.xirr)}</td></tr></tbody></table>`;
+    ${compareMode() ? '' : `<tr class="total"><td>All accounts</td><td>${money(t.value)}</td><td>${money(t.money_in)}</td><td class="${t.gain < 0 ? 'dn' : 'up'}">${signed(t.gain)}</td><td>${pct(t.xirr)}</td></tr>`}</tbody></table>`;
 }
 function renderHoldings() {
   // One row per asset, one column per account, so the same fund across accounts reads as one line.
@@ -475,20 +552,45 @@ function renderRoom() {
     '<p class="sub" style="margin-top:8px">Total is deposits minus withdrawals for the year. US dollar deposits are converted at the Bank of Canada rate on the day.</p>';
 }
 
+/* ---------- picks (chase demo) ---------- */
+function renderPicks() {
+  const P = DEMO_INFO && DEMO_INFO.picks;
+  $('picks-panel').hidden = !P;
+  if (!P) return;
+  $('picks-sub').textContent = 'Each January\'s $1,000 on its own: in that year\'s pick, and in the S&P 500 (SPY) on the same day. Dividends reinvested.';
+  const tot = P.reduce((s, p) => s + p.now, 0), idx = P.reduce((s, p) => s + p.index, 0);
+  const ratio = (a, b) => `<span class="${a < b ? 'dn' : 'up'}">${(a / b).toFixed(2)}×</span>`;
+  $('t-picks').innerHTML = `<table><thead><tr><th>Bought</th><th style="text-align:left">Pick</th><th>Now</th><th>Same $1,000 in S&amp;P 500</th><th>vs S&amp;P 500</th></tr></thead><tbody>` +
+    P.map(p => `<tr><td>${p.year}</td><td style="text-align:left;font-family:var(--sans)">${esc(p.name)} <span class="sub">${esc(p.symbol)}</span></td><td>${money(p.now)}</td><td>${money(p.index)}</td><td>${ratio(p.now, p.index)}</td></tr>`).join('') +
+    `<tr class="total"><td>All</td><td style="text-align:left;font-family:var(--sans)">${P.length} picks, ${money(P.length * 1000)} put in</td><td>${money(tot)}</td><td>${money(idx)}</td><td>${ratio(tot, idx)}</td></tr></tbody></table>`;
+}
+
 /* ---------- page ---------- */
 function renderAll() {
   if (!D) return;
-  $('meta').textContent = `Synced ${ago(D.last_sync)} · USD/CAD ${D.usdcad.toFixed(4)} (Bank of Canada)`;
+  $('meta').textContent = `Synced ${ago(D.last_sync)} · USD/CAD ${D.usdcad.toFixed(4)} (${DEMO ? 'simulated' : 'Bank of Canada'})`;
+  if (CUR === 'USD') $('meta').textContent = `Demo · amounts in US dollars` + (DEMO_INFO.prices_as_of ? ` · prices as of ${fmtDate(DEMO_INFO.prices_as_of)}` : '');
   const iss = D.issues;
   $('issues').hidden = !iss.length;
   $('issues').innerHTML = iss.length ? `<b>⚠ Check these</b><ul>${iss.map(i => `<li>${esc(maskText(i))}</li>`).join('')}</ul>` : '';
   $('content').hidden = false;
-  renderTiles(); renderFilter(); renderGrowth(); renderAccounts(); renderAllocation(); renderHoldings(); renderDividends(); renderWithholding(); renderRoom();
+  $('wh-panel').hidden = !D.withholding.accounts.some(a => a.payments) && !D.withholding.exempt_us_dividends_cad;
+  $('room-panel').hidden = !D.accounts.some(a => ['TFSA', 'FHSA', 'RRSP'].includes(a.type));
+  renderTiles(); renderFilter(); renderGrowth(); renderPicks(); renderAccounts(); renderAllocation(); renderHoldings(); renderDividends(); renderWithholding(); renderRoom();
 }
 
 async function load() {
   const r = await (await fetch('/api/summary')).json();
   D = r.data;
+  DEMO = !!r.demo;
+  DEMO_INFO = r.demo_info;
+  CUR = (DEMO_INFO && DEMO_INFO.currency) || 'CAD';
+  document.querySelectorAll('.curname').forEach(e => e.textContent = CUR === 'USD' ? 'US dollars' : 'Canadian dollars');
+  $('demo-banner').hidden = !r.demo;
+  if (DEMO_INFO) $('demo-banner').innerHTML = `<b>Demo: ${esc(DEMO_INFO.title)}.</b> ${esc(DEMO_INFO.note)}`;
+  $('demo-badge').hidden = !r.demo;
+  document.title = r.demo ? `Demo: ${DEMO_INFO.title} · Questrade Insights` : 'Questrade Insights';
+  $('sync-btn').hidden = !!r.demo;
   $('setup').hidden = !!(D && r.has_token && !r.needs_market_data);
   $('setup-why').textContent = r.needs_market_data
     ? "To show your value over time, the app needs price history. In App Hub, edit your app, turn on 'Retrieve delayed and real-time market data', generate a new token and paste it here."
