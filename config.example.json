@@ -1,0 +1,29 @@
+{
+  "skip_accounts": [
+    "12345678"
+  ],
+  "history_start": "2017-06-01",
+  "history_start_by_account": {
+    "87654321": "2024-12-01"
+  },
+  "symbol_aliases": {},
+  "asset_classes": {
+    "IBIT": "Other"
+  },
+  "tfsa_eligible_since": "2014-01-05",
+  "tfsa_nonresident_years": [
+    2015
+  ],
+  "tfsa_room_from_cra": {
+    "as_of": "2026-01-01",
+    "room": 12345.67
+  },
+  "sheet_id": "your-google-sheet-id",
+  "sheet_tab": "Stock txns",
+  "sheet_account_labels": {
+    "VOO": {
+      "TFSA": "tfsa-kid",
+      "RRSP": "RRSP Kid"
+    }
+  }
+}

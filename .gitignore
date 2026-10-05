@@ -1,0 +1,34 @@
+# --- Secrets ---
+# Questrade refresh token (and the temp file used while replacing it)
+.latest_token
+.latest_token.tmp
+*.tmp
+# Google sign-in keys and tokens
+google_service_account.json
+google_credentials.json
+*.pem
+*.key
+.env
+.env.*
+
+# --- Personal data ---
+# Local database: activity history, balances, positions, Google token
+data/
+*.db
+*.sqlite
+*.sqlite3
+# Exports from Questrade
+questrade_export.json
+questrade_activities.csv
+*.csv
+# Your settings: account numbers, sheet ID, labels (config.example.json is the template)
+config.json
+# Original export script, superseded by qtinsights; has account numbers in it
+questrade_export.py
+
+# --- Build and tool output ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
